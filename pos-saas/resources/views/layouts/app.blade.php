@@ -10,7 +10,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>{{ $title ?? config('app.name') }} — POS SaaS</title>
+<title>{{ $title ?? config('app.name') }} — Sellvix</title>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     @livewireStyles
 </head>
@@ -60,7 +60,7 @@
                 </svg>
             </div>
             <div>
-                <div class="text-sm font-bold text-gray-900 dark:text-white">POS SaaS</div>
+                <div class="text-sm font-bold text-gray-900 dark:text-white">Sellvix</div>
                 <div class="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[120px]">
                     {{ auth()->user()?->store?->name ?? 'Super Admin' }}
                 </div>
@@ -72,6 +72,21 @@
             @if(auth()->user()?->isSuperAdmin())
                 <x-sidebar-link href="{{ route('super-admin.dashboard') }}" icon="home">Dashboard</x-sidebar-link>
                 <x-sidebar-link href="{{ route('super-admin.stores.index') }}" icon="store">Kelola Toko</x-sidebar-link>
+                <a href="{{ route('super-admin.password-resets') }}"
+                   class="sidebar-link {{ request()->routeIs('super-admin.password-resets') ? 'active' : '' }} flex items-center justify-between">
+                    <span class="flex items-center gap-2">
+                        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                        </svg>
+                        Reset Password
+                    </span>
+                    @php $pendingCount = \App\Models\PasswordResetRequest::pending()->count(); @endphp
+                    @if($pendingCount > 0)
+                        <span class="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 text-[10px] font-bold text-white bg-red-500 rounded-full animate-pulse">
+                            {{ $pendingCount }}
+                        </span>
+                    @endif
+                </a>
             @elseif(auth()->user()?->isAdmin())
                 <x-sidebar-link href="{{ route('admin.dashboard') }}" icon="home">Dashboard</x-sidebar-link>
                 <x-sidebar-link href="{{ route('cashier.pos') }}" icon="pos">Kasir POS</x-sidebar-link>
@@ -104,6 +119,9 @@
                          class="absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform duration-200"></div>
                 </div>
             </button>
+
+            {{-- Change Password --}}
+            <x-sidebar-link href="{{ route('change-password') }}" icon="key">Ubah Password</x-sidebar-link>
 
             {{-- Logout --}}
             <form method="POST" action="{{ route('logout') }}">

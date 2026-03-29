@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sellvix - Laporan Penjualan</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'], },
+                    colors: {
+                        dark: '#0F172A',
+                        light: '#F8FAFC',
+                        muted: '#64748B',
+                        success: '#10B981',
+                        warning: '#F59E0B',
+                        danger: '#EF4444',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: #F8FAFC; color: #0F172A; }
+        .gradient-text { 
+            background: linear-gradient(135deg, #2563EB, #7C3AED); 
+            -webkit-background-clip: text; 
+            -webkit-text-fill-color: transparent; 
+        }
+        .bg-gradient-primary { 
+            background: linear-gradient(135deg, #2563EB, #7C3AED); 
+        }
+        .shadow-soft { box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.04); }
+        .shadow-strong { box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.08); }
+        .card-hover:hover { 
+            transform: translateY(-2px); 
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.08); 
+        }
+        .card-hover { transition: transform 0.2s ease, box-shadow 0.2s ease; border: 1px solid transparent; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
+    </style>
+</head>
+<body x-data="{ sidebarOpen: false }" class="flex h-screen overflow-hidden">
+
+    <!-- Mobile sidebar overlay -->
+    <div x-show="sidebarOpen" x-transition.opacity class="fixed inset-0 z-20 bg-dark/50 lg:hidden backdrop-blur-sm" @click="sidebarOpen = false"></div>
+
+    <!-- Sidebar -->
+    <aside :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full'" class="fixed inset-y-0 left-0 z-30 w-64 bg-white shadow-soft transition-transform duration-300 lg:static lg:translate-x-0 flex flex-col">
+        <!-- Logo -->
+        <div class="flex items-center justify-center h-20 border-b border-gray-100 flex-shrink-0">
+            <h1 class="text-2xl font-bold gradient-text tracking-tight flex items-center gap-2">
+                <i data-lucide="layers" class="text-blue-600 w-7 h-7"></i> Sellvix
+            </h1>
+        </div>
+
+        <!-- Navigation -->
+        <nav class="flex-1 px-4 py-6 space-y-1 overflow-y-auto">
+            <a href="dashboard.html" class="flex items-center gap-3 px-4 py-3 text-muted hover:text-dark hover:bg-gray-50 rounded-xl transition-all group">
+                <i data-lucide="layout-dashboard" class="w-5 h-5 text-gray-400 group-hover:text-blue-600"></i>
+                <span class="font-medium">Dashboard</span>
+            </a>
+            <a href="pos.html" class="flex items-center gap-3 px-4 py-3 text-muted hover:text-dark hover:bg-gray-50 rounded-xl transition-all group">
+                <i data-lucide="monitor-smartphone" class="w-5 h-5 text-gray-400 group-hover:text-blue-600"></i>
+                <span class="font-medium">Kasir (POS)</span>
+            </a>
+            <a href="#" class="flex items-center gap-3 px-4 py-3 text-muted hover:text-dark hover:bg-gray-50 rounded-xl transition-all group">
+                <i data-lucide="shopping-cart" class="w-5 h-5 text-gray-400"></i>
+                <span class="font-medium">Transaksi</span>
+            </a>
+            <a href="#" class="flex items-center gap-3 px-4 py-3 text-muted hover:text-dark hover:bg-gray-50 rounded-xl transition-all group">
+                <i data-lucide="package" class="w-5 h-5 text-gray-400"></i>
+                <span class="font-medium">Produk</span>
+            </a>
+            <a href="#" class="flex items-center gap-3 px-4 py-3 text-muted hover:text-dark hover:bg-gray-50 rounded-xl transition-all group">
+                <i data-lucide="users" class="w-5 h-5 text-gray-400"></i>
+                <span class="font-medium">Pelanggan</span>
+            </a>
+            <a href="reports.html" class="flex items-center gap-3 px-4 py-3 bg-gradient-primary text-white rounded-xl shadow-[0_4px_12px_rgba(37,99,235,0.3)] transition-all">
+                <i data-lucide="bar-chart-2" class="w-5 h-5"></i>
+                <span class="font-medium">Laporan</span>
+            </a>
+        </nav>
+
+        <!-- Footer Menu -->
+        <div class="p-4 border-t border-gray-100 flex-shrink-0">
+            <a href="#" class="flex items-center gap-3 px-4 py-2 text-muted hover:text-dark hover:bg-gray-50 rounded-lg transition-all group">
+                <i data-lucide="settings" class="w-5 h-5 text-gray-400 group-hover:text-dark"></i>
+                <span class="font-medium">Pengaturan</span>
+            </a>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col h-screen overflow-hidden">
+        
+        <!-- Top Navbar -->
+        <header class="h-20 bg-white border-b border-gray-100 flex items-center justify-between px-6 lg:px-10 z-10 flex-shrink-0">
+            <div class="flex items-center gap-4">
+                <button @click="sidebarOpen = true" class="p-2 text-gray-400 hover:text-dark lg:hidden rounded-lg hover:bg-gray-50">
+                    <i data-lucide="menu" class="w-6 h-6"></i>
+                </button>
+                <div class="hidden sm:block">
+                    <h2 class="text-xl font-bold text-dark">Laporan & Analitik</h2>
+                    <p class="text-xs text-muted font-medium mt-0.5">Tinjauan performa bisnis Anda secara detail</p>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-4">
+                <!-- Notifications -->
+                <button class="p-2.5 text-gray-400 hover:text-dark rounded-full hover:bg-gray-50 relative transition-all">
+                    <i data-lucide="bell" class="w-5 h-5"></i>
+                </button>
+
+                <!-- Profile -->
+                <div class="border-l border-gray-100 pl-4 ml-2">
+                    <button class="flex items-center gap-3 pl-2 py-1 rounded-full hover:bg-gray-50 transition-all">
+                        <img src="https://ui-avatars.com/api/?name=Admin+User&background=2563EB&color=fff&bold=true" alt="Profile" class="w-9 h-9 rounded-full ring-2 ring-gray-100">
+                        <div class="hidden md:block text-left">
+                            <p class="text-sm font-semibold text-dark">Budi Santoso</p>
+                            <p class="text-xs text-muted">Super Admin</p>
+                        </div>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Reports Content -->
+        <div class="flex-1 overflow-y-auto p-6 lg:p-10">
+            <div class="max-w-7xl mx-auto space-y-6">
+                
+                <!-- Filters Bar -->
+                <div class="bg-white p-4 rounded-2xl shadow-soft border border-gray-50 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                    <div class="flex flex-wrap items-center gap-3">
+                        <!-- Date Range -->
+                        <div class="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm font-medium text-dark cursor-pointer hover:bg-gray-100 transition-colors">
+                            <i data-lucide="calendar" class="w-4 h-4 text-gray-500"></i>
+                            <span>1 Okt 2023 - 31 Okt 2023</span>
+                            <i data-lucide="chevron-down" class="w-4 h-4 text-gray-400 ml-2"></i>
+                        </div>
+                        
+                        <!-- Category Filter -->
+                        <select class="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm font-medium text-dark cursor-pointer hover:bg-gray-100 transition-colors focus:ring-2 focus:ring-blue-500/20 focus:outline-none">
+                            <option value="">Semua Kategori</option>
+                            <option value="makanan">Makanan</option>
+                            <option value="minuman">Minuman</option>
+                            <option value="aksesoris">Aksesoris</option>
+                        </select>
+                    </div>
+
+                    <div class="flex items-center gap-3">
+                        <button class="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-dark rounded-xl font-medium text-sm hover:bg-gray-50 hover:border-gray-300 shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-gray-100">
+                            <i data-lucide="file-spreadsheet" class="w-4 h-4 text-green-600"></i> Export Excel
+                        </button>
+                        <button class="flex items-center gap-2 px-4 py-2 bg-dark text-white rounded-xl font-medium text-sm hover:bg-gray-800 shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-gray-300">
+                            <i data-lucide="file-text" class="w-4 h-4 text-red-400"></i> Unduh PDF
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 3 Summary Highlights -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <!-- Total Revenue -->
+                    <div class="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-2xl p-6 shadow-strong border border-blue-500/20 relative overflow-hidden group">
+                        <div class="absolute -right-6 -top-6 w-32 h-32 bg-white/10 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-700"></div>
+                        <div class="relative z-10">
+                            <div class="flex justify-between items-start mb-4">
+                                <div>
+                                    <p class="text-blue-100 font-medium text-sm mb-1 text-shadow">Total Pendapatan</p>
+                                    <h3 class="text-3xl font-extrabold text-white">Rp 124.5M</h3>
+                                </div>
+                                <div class="w-12 h-12 bg-white/20 backdrop-blur-md rounded-xl flex items-center justify-center text-white shadow-inner">
+                                    <i data-lucide="bar-chart-2" class="w-6 h-6"></i>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-2 text-sm text-blue-50 bg-blue-900/40 w-fit px-3 py-1 rounded-full backdrop-blur-md border border-blue-400/30">
+                                <i data-lucide="trending-up" class="w-4 h-4 text-green-400"></i>
+                                <span>+14.5% dari bulan lalu</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Total Transaksi -->
+                    <div class="bg-white rounded-2xl p-6 shadow-soft card-hover border border-gray-50 flex flex-col justify-between">
+                        <div class="flex justify-between items-start mb-4">
+                            <div>
+                                <p class="text-muted font-medium text-sm mb-1">Total Transaksi</p>
+                                <h3 class="text-3xl font-extrabold text-dark">8,459</h3>
+                            </div>
+                            <div class="w-12 h-12 bg-violet-50 text-violet-600 rounded-xl flex items-center justify-center">
+                                <i data-lucide="receipt" class="w-6 h-6"></i>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2 text-sm">
+                            <span class="flex items-center text-success font-semibold px-2 py-0.5 bg-green-50 rounded-full"><i data-lucide="arrow-up-right" class="w-3 h-3 mr-1"></i> 5.2%</span>
+                            <span class="text-gray-400 font-medium">dari bulan lalu</span>
+                        </div>
+                    </div>
+
+                    <!-- Produk Terlaris Metric -->
+                    <div class="bg-white rounded-2xl p-6 shadow-soft card-hover border border-gray-50 flex flex-col justify-between">
+                        <div class="flex justify-between items-start mb-4">
+                            <div>
+                                <p class="text-muted font-medium text-sm mb-1">Total Item Terjual</p>
+                                <h3 class="text-3xl font-extrabold text-dark">12,230</h3>
+                            </div>
+                            <div class="w-12 h-12 bg-orange-50 text-warning rounded-xl flex items-center justify-center">
+                                <i data-lucide="package" class="w-6 h-6"></i>
+                            </div>
+                        </div>
+                        <div class="flex justify-between items-center text-sm border-t border-gray-100 pt-3 mt-1">
+                            <span class="text-muted font-medium">Rata-rata order:</span>
+                            <span class="text-dark font-bold">Rp 145.000 / tx</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Main Chart -->
+                <div class="bg-white rounded-2xl p-6 shadow-soft border border-gray-50">
+                    <div class="flex items-center justify-between mb-8">
+                        <div>
+                            <h3 class="text-lg font-bold text-dark mb-1">Grafik Pertumbuhan Pendapatan</h3>
+                            <p class="text-sm text-muted">Perbandingan pendapatan berdasarkan minggu ini.</p>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <div class="flex items-center gap-2 text-sm">
+                                <span class="w-3 h-3 rounded-full bg-blue-600"></span>
+                                <span class="text-dark font-medium cursor-pointer">Bulan Ini</span>
+                            </div>
+                            <div class="flex items-center gap-2 text-sm">
+                                <span class="w-3 h-3 rounded-full bg-gray-300"></span>
+                                <span class="text-muted font-medium cursor-pointer hover:text-dark">Bulan Lalu</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Chart Visual Mockup -->
+                    <div class="h-80 w-full relative flex items-end">
+                        <!-- Y-axis -->
+                        <div class="absolute left-0 top-0 bottom-8 flex flex-col justify-between text-xs text-muted font-medium pr-4 w-12 text-right">
+                            <span>40M</span>
+                            <span>30M</span>
+                            <span>20M</span>
+                            <span>10M</span>
+                            <span>0</span>
+                        </div>
+                        
+                        <!-- Grid lines -->
+                        <div class="absolute left-12 right-0 top-0 bottom-8 flex flex-col justify-between pointer-events-none">
+                            <div class="w-full h-px bg-gray-100"></div>
+                            <div class="w-full h-px bg-gray-100"></div>
+                            <div class="w-full h-px bg-gray-100"></div>
+                            <div class="w-full h-px bg-gray-100"></div>
+                            <div class="w-full h-px bg-gray-200"></div>
+                        </div>
+
+                        <!-- Smooth Line visual layer (SVG) -->
+                        <div class="absolute left-12 right-0 top-0 bottom-8 z-10 pointer-events-none">
+                            <svg class="w-full h-full" preserveAspectRatio="none" viewBox="0 0 100 100">
+                                <!-- Background gradient under line -->
+                                <defs>
+                                    <linearGradient id="blueGradient" x1="0" x2="0" y1="0" y2="1">
+                                        <stop offset="0%" stop-color="#2563EB" stop-opacity="0.2"/>
+                                        <stop offset="100%" stop-color="#2563EB" stop-opacity="0"/>
+                                    </linearGradient>
+                                    <linearGradient id="grayGradient" x1="0" x2="0" y1="0" y2="1">
+                                        <stop offset="0%" stop-color="#CBD5E1" stop-opacity="0.1"/>
+                                        <stop offset="100%" stop-color="#CBD5E1" stop-opacity="0"/>
+                                    </linearGradient>
+                                </defs>
+                                
+                                <!-- Last Month (Gray line) -->
+                                <path fill="url(#grayGradient)" d="M0 100 L0 70 Q 10 75, 20 60 T 40 65 T 60 55 T 80 45 T 100 50 L100 100 Z" stroke="none" />
+                                <path fill="none" class="text-gray-300" stroke="currentColor" stroke-dasharray="4" stroke-width="2" vector-effect="non-scaling-stroke" d="M0 70 Q 10 75, 20 60 T 40 65 T 60 55 T 80 45 T 100 50" />
+                                
+                                <!-- This Month (Blue line) -->
+                                <path fill="url(#blueGradient)" d="M0 100 L0 80 Q 10 70, 20 50 T 40 40 T 60 20 T 80 15 T 100 5 L100 100 Z" stroke="none" />
+                                <path fill="none" stroke="url(#lineGradient)" stroke-width="3" vector-effect="non-scaling-stroke" d="M0 80 Q 10 70, 20 50 T 40 40 T 60 20 T 80 15 T 100 5" />
+                                
+                                <defs>
+                                    <linearGradient id="lineGradient" x1="0" x2="1" y1="0" y2="0">
+                                        <stop offset="0%" stop-color="#3B82F6"/>
+                                        <stop offset="100%" stop-color="#7C3AED"/>
+                                    </linearGradient>
+                                </defs>
+                            </svg>
+                        </div>
+                        
+                        <!-- Tooltip indicator at data point -->
+                        <div class="absolute z-20" style="left: calc(85%); bottom: calc(85% - 10px);">
+                            <div class="w-3 h-3 bg-white border-2 border-violet-600 rounded-full shadow-md"></div>
+                            <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-dark text-white text-xs font-bold py-1.5 px-3 rounded-lg shadow-lg whitespace-nowrap">
+                                4 Okt: Rp 38.5M
+                                <div class="absolute top-full left-1/2 -translate-x-1/2 border-[5px] border-transparent border-t-dark"></div>
+                            </div>
+                        </div>
+
+                        <!-- X-axis Labels -->
+                        <div class="absolute left-12 right-0 bottom-0 h-8 flex justify-between items-end text-xs font-semibold text-muted tracking-wide uppercase px-2">
+                            <span>Mgg 1</span>
+                            <span>Mgg 2</span>
+                            <span>Mgg 3</span>
+                            <span>Mgg 4</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Detailed Table: Data Produk Terlaris -->
+                <div class="bg-white rounded-2xl shadow-soft border border-gray-50 overflow-hidden">
+                    <div class="p-6 border-b border-gray-100 flex justify-between items-center bg-white">
+                        <div>
+                            <h3 class="text-lg font-bold text-dark mb-1">Detail Penjualan Produk</h3>
+                            <p class="text-sm text-muted">Ringkasan performa setiap produk.</p>
+                        </div>
+                        <div class="relative">
+                            <i data-lucide="search" class="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
+                            <input type="text" placeholder="Cari di tabel..." class="pl-9 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-medium placeholder-gray-400">
+                        </div>
+                    </div>
+                    
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-sm whitespace-nowrap">
+                            <thead class="bg-gray-50/80 text-muted uppercase text-[11px] font-bold tracking-wider">
+                                <tr>
+                                    <th class="px-6 py-4 rounded-tl-lg">Informasi Produk</th>
+                                    <th class="px-6 py-4 cursor-pointer hover:text-dark">Kategori <i data-lucide="chevron-down" class="w-3 h-3 inline"></i></th>
+                                    <th class="px-6 py-4 text-right cursor-pointer hover:text-dark">Jumlah Terjual <i data-lucide="chevron-down" class="w-3 h-3 inline"></i></th>
+                                    <th class="px-6 py-4 text-right cursor-pointer text-blue-600">Total Revenue <i data-lucide="arrow-down" class="w-3 h-3 inline"></i></th>
+                                    <th class="px-6 py-4 text-center">Trend (30 Hr)</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-100 text-dark">
+                                <!-- Row 1 -->
+                                <tr class="hover:bg-blue-50/30 transition-colors group">
+                                    <td class="px-6 py-4 flex items-center gap-4 border-l-4 border-transparent group-hover:border-blue-500">
+                                        <img src="https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=100&h=100&fit=crop" class="w-12 h-12 rounded-lg object-cover shadow-sm" alt="Product">
+                                        <div>
+                                            <h4 class="font-bold text-dark">Sepatu Lari Nike Air</h4>
+                                            <span class="text-xs text-muted font-medium">SKU: NK-AR-001</span>
+                                        </div>
+                                    </td>
+                                    <td class="px-6 py-4">
+                                        <span class="px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-xs font-semibold">Fashion</span>
+                                    </td>
+                                    <td class="px-6 py-4 text-right font-semibold">1,245</td>
+                                    <td class="px-6 py-4 text-right">
+                                        <span class="font-bold text-dark bg-green-50 text-green-700 px-2 py-1 rounded">Rp 45.8M</span>
+                                    </td>
+                                    <td class="px-6 py-4">
+                                        <div class="flex items-center justify-center text-success gap-1">
+                                            <i data-lucide="trending-up" class="w-4 h-4"></i>
+                                            <span class="text-xs font-bold">+12%</span>
+                                        </div>
+                                    </td>
+                                </tr>
+                                
+                                <!-- Row 2 -->
+                                <tr class="hover:bg-blue-50/30 transition-colors group">
+                                    <td class="px-6 py-4 flex items-center gap-4 border-l-4 border-transparent group-hover:border-blue-500">
+                                        <img src="https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=100&h=100&fit=crop" class="w-12 h-12 rounded-lg object-cover shadow-sm" alt="Product">
+                                        <div>
+                                            <h4 class="font-bold text-dark">Jam Tangan Smart Watch</h4>
+                                            <span class="text-xs text-muted font-medium">SKU: SW-PRO-12</span>
+                                        </div>
+                                    </td>
+                                    <td class="px-6 py-4">
+                                        <span class="px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-xs font-semibold">Elektronik</span>
+                                    </td>
+                                    <td class="px-6 py-4 text-right font-semibold">892</td>
+                                    <td class="px-6 py-4 text-right">
+                                        <span class="font-bold text-dark">Rp 32.4M</span>
+                                    </td>
+                                    <td class="px-6 py-4">
+                                        <div class="flex items-center justify-center text-success gap-1">
+                                            <i data-lucide="trending-up" class="w-4 h-4"></i>
+                                            <span class="text-xs font-bold">+8%</span>
+                                        </div>
+                                    </td>
+                                </tr>
+
+                                <!-- Row 3 -->
+                                <tr class="hover:bg-blue-50/30 transition-colors group">
+                                    <td class="px-6 py-4 flex items-center gap-4 border-l-4 border-transparent group-hover:border-blue-500">
+                                        <img src="https://images.unsplash.com/photo-1572635196237-14b3f281503f?w=100&h=100&fit=crop" class="w-12 h-12 rounded-lg object-cover shadow-sm" alt="Product">
+                                        <div>
+                                            <h4 class="font-bold text-dark">Kacamata Hitam Ray-Ban</h4>
+                                            <span class="text-xs text-muted font-medium">SKU: RB-AV-99</span>
+                                        </div>
+                                    </td>
+                                    <td class="px-6 py-4">
+                                        <span class="px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-xs font-semibold">Aksesoris</span>
+                                    </td>
+                                    <td class="px-6 py-4 text-right font-semibold">2,104</td>
+                                    <td class="px-6 py-4 text-right">
+                                        <span class="font-bold text-dark">Rp 28.5M</span>
+                                    </td>
+                                    <td class="px-6 py-4">
+                                        <div class="flex items-center justify-center text-danger gap-1">
+                                            <i data-lucide="trending-down" class="w-4 h-4"></i>
+                                            <span class="text-xs font-bold">-3%</span>
+                                        </div>
+                                    </td>
+                                </tr>
+                                
+                                <!-- Row 4 -->
+                                <tr class="hover:bg-blue-50/30 transition-colors group">
+                                    <td class="px-6 py-4 flex items-center gap-4 border-l-4 border-transparent group-hover:border-blue-500">
+                                        <img src="https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=100&h=100&fit=crop" class="w-12 h-12 rounded-lg object-cover shadow-sm" alt="Product">
+                                        <div>
+                                            <h4 class="font-bold text-dark">Headphone Sony WH-1000XM4</h4>
+                                            <span class="text-xs text-muted font-medium">SKU: SN-WH-04</span>
+                                        </div>
+                                    </td>
+                                    <td class="px-6 py-4">
+                                        <span class="px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-xs font-semibold">Elektronik</span>
+                                    </td>
+                                    <td class="px-6 py-4 text-right font-semibold">415</td>
+                                    <td class="px-6 py-4 text-right">
+                                        <span class="font-bold text-dark">Rp 19.8M</span>
+                                    </td>
+                                    <td class="px-6 py-4">
+                                        <div class="flex items-center justify-center text-gray-400 gap-1">
+                                            <i data-lucide="minus" class="w-4 h-4"></i>
+                                            <span class="text-xs font-bold">0%</span>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <!-- Pagination -->
+                    <div class="p-4 border-t border-gray-100 bg-white flex items-center justify-between">
+                        <span class="text-sm text-muted font-medium">Menampilkan 1-4 dari 45 produk</span>
+                        <div class="flex items-center gap-2">
+                            <button class="w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center text-gray-400 hover:bg-gray-50 transition-colors disabled:opacity-50"><i data-lucide="chevron-left" class="w-4 h-4"></i></button>
+                            <button class="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 font-bold text-sm flex items-center justify-center">1</button>
+                            <button class="w-8 h-8 rounded-lg border border-gray-200 text-dark font-medium text-sm flex items-center justify-center hover:bg-gray-50 transition-colors">2</button>
+                            <button class="w-8 h-8 rounded-lg border border-gray-200 text-dark font-medium text-sm flex items-center justify-center hover:bg-gray-50 transition-colors">3</button>
+                            <span class="text-gray-400 text-sm">...</span>
+                            <button class="w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center text-dark hover:bg-gray-50 transition-colors"><i data-lucide="chevron-right" class="w-4 h-4"></i></button>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </main>
+
+    <script>
+        lucide.createIcons();
+    </script>
+</body>
+</html>

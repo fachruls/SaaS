@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sellvix - Layar Kasir (POS)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Use Inter for Main UI, and JetBrains Mono or Roboto Mono for Receipt -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Roboto+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { 
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['Roboto Mono', 'monospace'],
+                    },
+                    colors: {
+                        dark: '#0F172A',
+                        light: '#F8FAFC',
+                        muted: '#64748B',
+                        success: '#10B981',
+                        warning: '#F59E0B',
+                        danger: '#EF4444',
+                        qris: '#0284C7', 
+                        tunai: '#16A34A', 
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: #F8FAFC; color: #0F172A; }
+        .bg-gradient-primary { background: linear-gradient(135deg, #2563EB, #7C3AED); }
+        .text-gradient { 
+            background: linear-gradient(135deg, #2563EB, #7C3AED); 
+            -webkit-background-clip: text; 
+            -webkit-text-fill-color: transparent; 
+        }
+        .shadow-soft { box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.04); }
+        .shadow-up { box-shadow: 0 -4px 20px -2px rgba(0, 0, 0, 0.05); }
+        .card-hover:hover { 
+            transform: translateY(-2px); 
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.08); 
+        }
+        .card-hover { transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease; border: 1px solid transparent; }
+        .product-active { border-color: #2563EB; box-shadow: 0 0 0 2px rgba(37,99,235,0.2); }
+        
+        ::-webkit-scrollbar { width: 5px; height: 5px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        @keyframes scan {
+            0% { top: 10%; opacity: 0; }
+            10% { opacity: 1; }
+            90% { opacity: 1; }
+            100% { top: 90%; opacity: 0; }
+        }
+        .scan-line {
+            width: 100%; height: 2px;
+            background: linear-gradient(to right, transparent, #3B82F6, transparent);
+            position: absolute; animation: scan 2s linear infinite;
+        }
+
+        /* Paper tear effect for receipt bottom */
+        .receipt-bottom::after {
+            content: "";
+            position: absolute;
+            bottom: -8px;
+            left: 0;
+            right: 0;
+            height: 8px;
+            background-size: 16px 16px;
+            background-image: radial-gradient(circle at 8px 0, transparent 8px, white 9px);
+            background-repeat: repeat-x;
+        }
+
+        /* Only show receipt when printing */
+        @media print {
+            body * { visibility: hidden; }
+            #thermal-receipt, #thermal-receipt * { visibility: visible; }
+            #thermal-receipt {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 80mm; /* Standard thermal width */
+                padding: 0;
+                margin: 0;
+                box-shadow: none !important;
+            }
+        }
+    </style>
+</head>
+<body x-data="{ 
+    mobileCartOpen: false, 
+    view: 'cart', // 'cart' | 'payment'
+    method: 'tunai', // 'qris' | 'tunai'
+    grandTotal: 3135750,
+    cashReceived: '', 
+    get cashReceivedNum() { return parseInt(this.cashReceived.replace(/[^0-9]/g, '')) || 0; },
+    get changeAmount() { let diff = this.cashReceivedNum - this.grandTotal; return diff > 0 ? diff : 0; },
+    get isCashSufficient() { return this.cashReceivedNum >= this.grandTotal; },
+    qrisStatus: 'idle', 
+    countdown: 60,
+    qrisTimer: null,
+    
+    // Offline State
+    isOffline: false,
+    isSyncing: false,
+    pendingSyncCount: 2,
+    
+    // Receipt Modal logic
+    showReceipt: false,
+    
+    toggleOffline() {
+        this.isOffline = !this.isOffline;
+        if (!this.isOffline) {
+            this.syncData();
+        }
+    },
+    syncData() {
+        this.isSyncing = true;
+        setTimeout(() => {
+            this.isSyncing = false;
+            this.pendingSyncCount = 0;
+            // Trigger temporary success notification
+            let toast = document.createElement('div');
+            toast.className = 'fixed bottom-4 left-1/2 -translate-x-1/2 bg-gray-900 text-white px-6 py-3 rounded-xl shadow-2xl z-50 flex items-center gap-2 animate-fade-in font-medium text-sm';
+            toast.innerHTML = `<i data-lucide='check-circle' class='text-green-400 w-5 h-5'></i> Sinkronisasi berhasil!`;
+            document.body.appendChild(toast);
+            lucide.createIcons();
+            setTimeout(() => toast.remove(), 3000);
+        }, 2000);
+    },
+    generateQR() {
+        this.qrisStatus = 'generating';
+        setTimeout(() => {
+            this.qrisStatus = 'waiting';
+            this.countdown = 60;
+            this.qrisTimer = setInterval(() => {
+                this.countdown--;
+                if(this.countdown <= 0) {
+                    clearInterval(this.qrisTimer);
+                    this.qrisStatus = 'expired';
+                }
+            }, 1000);
+        }, 1200);
+    },
+    simulateQpSuccess() {
+        clearInterval(this.qrisTimer);
+        this.qrisStatus = 'success';
+    },
+    formatRp(angka) {
+        return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(angka);
+    },
+    formatDate() {
+        let d = new Date();
+        return `${d.getDate().toString().padStart(2,'0')}/${(d.getMonth()+1).toString().padStart(2,'0')}/${d.getFullYear()} ${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`;
+    }
+}" class="flex flex-col h-screen overflow-hidden">
+
+    <!-- Offline Banners -->
+    <div x-show="isOffline" style="display:none;" x-transition class="bg-red-500 text-white px-4 py-2.5 text-sm font-medium flex items-center justify-center gap-2 shadow-inner z-50 relative">
+        <i data-lucide="wifi-off" class="w-4 h-4"></i>
+        Mode offline aktif – transaksi akan disimpan lokal dan disinkronkan saat terhubung ke internet. 
+        <span class="bg-red-600 px-2 py-0.5 rounded-full text-xs ml-2 border border-red-400 font-bold" x-text="pendingSyncCount + ' Pending'"></span>
+    </div>
+    <div x-show="isSyncing" style="display:none;" x-transition class="bg-blue-600 text-white px-4 py-2 text-sm font-medium flex items-center justify-center gap-2 shadow-inner z-50 relative">
+        <i data-lucide="refresh-cw" class="w-4 h-4 animate-spin"></i>
+        Menyinkronkan data... Mohon jangan tutup halaman ini.
+    </div>
+
+    <!-- Top Navbar -->
+    <header class="h-16 bg-white border-b border-gray-100 flex items-center justify-between px-4 lg:px-6 z-20 flex-shrink-0 shadow-sm relative">
+        <div class="flex items-center gap-4">
+            <a href="dashboard.html" class="flex items-center gap-2 text-dark hover:opacity-80 transition-opacity">
+                <div class="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-200 transition-colors">
+                    <i data-lucide="arrow-left" class="w-4 h-4"></i>
+                </div>
+                <h1 class="text-xl font-bold text-gradient tracking-tight items-center gap-2 hidden sm:flex">
+                    <i data-lucide="layers" class="text-blue-600 w-5 h-5"></i> Sellvix
+                </h1>
+            </a>
+            
+            <div class="h-6 w-px bg-gray-200 mx-1 hidden sm:block"></div>
+            
+            <!-- Online/Offline Badge -->
+            <button @click="toggleOffline()" class="flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-full border transition-colors uppercase tracking-wider shadow-sm"
+                    :class="isOffline ? 'bg-red-50 text-red-600 border-red-200' : 'bg-green-50 text-green-600 border-green-200'">
+                <i data-lucide="wifi" class="w-3.5 h-3.5" x-show="!isOffline"></i>
+                <i data-lucide="wifi-off" class="w-3.5 h-3.5" x-show="isOffline" style="display:none;"></i>
+                <span x-text="isOffline ? 'Offline' : 'Online'"></span>
+            </button>
+        </div>
+        
+        <div class="flex items-center gap-3">
+            <button class="flex items-center gap-2 text-sm font-medium text-dark bg-gray-50 px-3 py-1.5 rounded-lg hover:bg-gray-100 transition-colors border border-gray-200">
+                <i data-lucide="user-plus" class="w-4 h-4 text-gray-400"></i>
+                <span class="hidden sm:inline">Pilih Pelanggan</span>
+            </button>
+            <div class="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-xs ring-2 ring-gray-100">BS</div>
+            
+            <!-- Mobile cart toggle -->
+            <button @click="mobileCartOpen = !mobileCartOpen" class="lg:hidden p-2 relative text-dark bg-gray-50 rounded-lg border border-gray-200 ml-2">
+                <i data-lucide="shopping-cart" class="w-5 h-5"></i>
+                <span class="absolute -top-1 -right-1 w-4 h-4 bg-danger text-white text-[10px] font-bold flex items-center justify-center rounded-full">3</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content: 2 Columns -->
+    <main class="flex-1 flex overflow-hidden relative">
+        <!-- Left Column: Products -->
+        <section class="flex-1 flex flex-col bg-[#F8FAFC]">
+            ...
+            <div class="bg-white p-4 border-b border-gray-100 shadow-sm z-10 flex-shrink-0">
+                <!-- Search & Filters -->
+                <div class="flex flex-col sm:flex-row gap-4 justify-between">
+                    <div class="relative w-full sm:max-w-md">
+                        <i data-lucide="search" class="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
+                        <input type="text" placeholder="Cari nama produk atau SKU..." class="w-full pl-10 pr-10 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-medium placeholder-gray-400">
+                    </div>
+                </div>
+                <!-- Category Pills -->
+                <div class="flex gap-2 overflow-x-auto no-scrollbar mt-4 pb-1">
+                    <button class="whitespace-nowrap px-4 py-2 bg-dark text-white rounded-full text-sm font-medium shadow-sm transition-colors">Semua Kategori</button>
+                    <button class="whitespace-nowrap px-4 py-2 bg-white border border-gray-200 text-muted hover:border-gray-300 hover:text-dark rounded-full text-sm font-medium transition-colors">Makanan</button>
+                    <button class="whitespace-nowrap px-4 py-2 bg-white border border-gray-200 text-muted hover:border-gray-300 hover:text-dark rounded-full text-sm font-medium transition-colors">Minuman</button>
+                    <button class="whitespace-nowrap px-4 py-2 bg-white border border-gray-200 text-muted hover:border-gray-300 hover:text-dark rounded-full text-sm font-medium transition-colors">Elektronik</button>
+                </div>
+            </div>
+
+            <div class="flex-1 overflow-y-auto p-4 lg:p-6 pb-24 lg:pb-6 relative">
+                <!-- Overlay disable products while in payment view -->
+                <div x-show="view === 'payment'" class="absolute inset-0 bg-white/50 backdrop-blur-sm z-20 flex flex-col items-center justify-center transition-opacity">
+                    <div class="bg-dark/80 text-white px-6 py-3 rounded-xl font-semibold shadow-lg mb-2 flex items-center gap-2">
+                        <i data-lucide="lock" class="w-5 h-5 text-yellow-400"></i> Mode Pembayaran Aktif
+                    </div>
+                    <button @click="view = 'cart'" class="text-blue-600 font-medium hover:underline px-4 py-2 bg-white rounded-lg shadow-sm border border-gray-200">Batal Pembayaran</button>
+                </div>
+
+                <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
+                    <!-- Product 1 -->
+                    <div class="bg-white rounded-2xl p-3 shadow-sm card-hover cursor-pointer border border-gray-100">
+                        <div class="aspect-square rounded-xl overflow-hidden bg-gray-50 mb-3"><img src="https://images.unsplash.com/photo-1572635196237-14b3f281503f?w=300&h=300&fit=crop" class="w-full h-full object-cover" alt=""></div>
+                        <div>
+                            <p class="text-[10px] text-muted font-medium mb-1">AKSESORIS</p>
+                            <h3 class="font-semibold text-sm leading-tight mb-2">Kacamata Ray-Ban</h3>
+                            <div class="flex justify-between items-center"><span class="font-bold text-blue-600">Rp 1.250K</span><button class="w-8 h-8 rounded-full bg-blue-50 text-blue-600"><i data-lucide="plus" class="w-4 h-4 mx-auto"></i></button></div>
+                        </div>
+                    </div>
+                    <!-- Product 2 Active -->
+                    <div class="bg-white rounded-2xl p-3 shadow-md card-hover cursor-pointer border border-blue-600 ring-2 ring-blue-600/20 relative">
+                        <div class="absolute -top-2 -right-2 w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold text-xs ring-2 ring-white z-10 shadow-sm">2</div>
+                        <div class="aspect-square rounded-xl overflow-hidden bg-gray-50 mb-3"><img src="https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=300&h=300&fit=crop" class="w-full h-full object-cover" alt=""></div>
+                        <div>
+                            <p class="text-[10px] text-muted font-medium mb-1">ELEKTRONIK</p>
+                            <h3 class="font-semibold text-sm leading-tight mb-2">Smart Watch Pro</h3>
+                            <div class="flex justify-between items-center"><span class="font-bold text-blue-600">Rp 850K</span><button class="w-8 h-8 rounded-full bg-blue-600 text-white"><i data-lucide="check" class="w-4 h-4 mx-auto"></i></button></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Right Column (Cart & Payment) -->
+        <aside :class="mobileCartOpen ? 'translate-x-0' : 'translate-x-full'" class="fixed lg:static inset-y-0 right-0 z-30 w-[90%] sm:w-[400px] lg:w-[380px] xl:w-[450px] bg-white border-l border-gray-100 flex flex-col shadow-2xl lg:shadow-none transition-transform duration-300 lg:translate-x-0 mt-[4rem] lg:mt-0 h-[calc(100vh-4rem)] lg:h-full">
+            
+            <!-- STATE: CART -->
+            <div x-show="view === 'cart'" class="flex flex-col h-full absolute inset-0 bg-white z-10">
+                <div class="p-5 border-b border-gray-100 flex justify-between bg-white flex-shrink-0">
+                    <div>
+                        <h2 class="text-xl font-bold text-dark">Pesanan Saat Ini</h2>
+                        <div class="flex items-center gap-2 mt-1">
+                            <span class="text-xs text-muted font-medium">Tx #12345</span>
+                            <span x-show="isOffline" class="text-[10px] bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">Pending Sync</span>
+                        </div>
+                    </div>
+                    <button @click="mobileCartOpen = false" class="lg:hidden p-2 text-gray-400 group"><i data-lucide="x" class="w-5 h-5 group-hover:text-dark"></i></button>
+                </div>
+
+                <div class="flex-1 overflow-y-auto p-5 space-y-4">
+                    <div class="flex gap-4 p-2 -mx-2 hover:bg-gray-50 rounded-xl relative">
+                        <img src="https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=100&h=100&fit=crop" class="w-16 h-16 rounded-lg object-cover" alt="Item">
+                        <div class="flex-1 flex flex-col justify-between">
+                            <div class="flex gap-2 justify-between">
+                                <h4 class="font-semibold text-sm text-dark">Smart Watch Pro</h4>
+                                <span class="font-bold text-sm text-dark whitespace-nowrap">Rp 1.700K</span>
+                            </div>
+                            <div class="flex justify-between items-center mt-2">
+                                <span class="text-xs text-muted">@Rp 850.000</span>
+                                <div class="flex items-center bg-gray-50 border rounded-lg p-0.5">
+                                    <button class="w-7 h-7 text-gray-500 hover:text-blue-600">-</button>
+                                    <span class="w-8 text-center text-sm font-bold">2</span>
+                                    <button class="w-7 h-7 text-gray-500 hover:text-blue-600">+</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Item 2 -->
+                    <div class="flex gap-4 p-2 -mx-2 hover:bg-gray-50 rounded-xl">
+                        <img src="https://images.unsplash.com/photo-1572635196237-14b3f281503f?w=100&h=100&fit=crop" class="w-16 h-16 rounded-lg object-cover" alt="Item">
+                        <div class="flex-1 flex flex-col justify-between">
+                            <div class="flex gap-2 justify-between">
+                                <h4 class="font-semibold text-sm text-dark">Kacamata Ray-Ban</h4>
+                                <span class="font-bold text-sm text-dark whitespace-nowrap">Rp 1.250K</span>
+                            </div>
+                            <div class="flex justify-between items-center mt-2">
+                                <span class="text-xs text-muted">@Rp 1.250.000</span>
+                                <div class="flex items-center bg-gray-50 border rounded-lg p-0.5">
+                                    <button class="w-7 h-7 text-gray-500 hover:text-red-500">-</button>
+                                    <span class="w-8 text-center text-sm font-bold">1</span>
+                                    <button class="w-7 h-7 text-gray-500 hover:text-blue-600">+</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="p-5 bg-white border-t border-gray-100 flex-shrink-0 z-20">
+                    <div class="space-y-3 mb-6">
+                        <div class="flex justify-between items-center text-sm">
+                            <span class="text-muted font-medium">Subtotal</span>
+                            <span class="font-semibold text-dark">Rp 2.950.000</span>
+                        </div>
+                        <div class="flex justify-between items-center text-sm">
+                            <span class="text-muted font-medium">Pajak (11%)</span>
+                            <span class="font-semibold text-dark">Rp 310.750</span>
+                        </div>
+                        <div class="flex justify-between items-end border-t border-dashed my-2 pt-2">
+                            <span class="text-sm font-bold text-dark">Total</span>
+                            <span class="text-3xl font-extrabold text-gradient" x-text="formatRp(grandTotal)"></span>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-12 gap-3">
+                        <button class="col-span-4 py-3.5 border rounded-xl font-bold text-sm text-dark hover:bg-gray-50">Draft</button>
+                        <button @click="view = 'payment'" class="col-span-8 py-3.5 bg-gradient-primary rounded-xl font-bold text-sm text-white hover:opacity-95 flex justify-center items-center gap-2 shadow-lg hover:-translate-y-0.5">
+                            Bayar Sekarang <i data-lucide="arrow-right" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- STATE: PAYMENT -->
+            <div x-show="view === 'payment'" style="display: none;" class="flex flex-col h-full absolute inset-0 bg-white z-20">
+                <div class="p-5 border-b flex items-center gap-4 bg-white flex-shrink-0">
+                    <button @click="view = 'cart'" class="w-10 h-10 rounded-xl bg-gray-50 border flex justify-center items-center text-gray-500"><i data-lucide="arrow-left" class="w-5 h-5"></i></button>
+                    <div><h2 class="text-xl font-bold">Pembayaran</h2><p class="text-xs text-muted">Metode Pelanggan</p></div>
+                </div>
+
+                <div class="p-5 bg-gray-50 border-b">
+                    <div class="bg-white p-1 rounded-xl border flex shadow-sm relative">
+                        <div class="absolute inset-y-1 w-[calc(50%-4px)] rounded-lg transition-all duration-300"
+                             :class="method === 'qris' ? 'left-1 bg-qris text-white' : 'left-[calc(50%+2px)] bg-tunai text-white'"></div>
+                        <button @click="method = 'tunai'" class="flex-1 py-3 px-4 relative z-10 font-bold text-sm tracking-wide" :class="method === 'tunai' ? 'text-white' : 'text-gray-500'">TUNAI</button>
+                        <button @click="method = 'qris'" class="flex-1 py-3 px-4 relative z-10 font-bold text-sm tracking-wide" :class="method === 'qris' ? 'text-white' : 'text-gray-500'">QRIS</button>
+                    </div>
+                </div>
+
+                <div class="bg-gray-900 text-white p-6 flex flex-col items-center justify-center border-b-[6px]" :class="method === 'tunai' ? 'border-tunai' : 'border-qris'">
+                    <span class="text-gray-400 text-sm font-medium mb-1">Total Tagihan</span>
+                    <span class="text-4xl font-black bg-clip-text text-transparent" :class="method === 'tunai' ? 'bg-gradient-to-r from-green-300 to-green-500' : 'bg-gradient-to-r from-blue-300 to-cyan-400'" x-text="formatRp(grandTotal)"></span>
+                </div>
+
+                <div class="flex-1 overflow-y-auto w-full relative">
+                    <!-- TUNAI -->
+                    <div x-show="method === 'tunai'" class="p-6 h-full flex flex-col">
+                        <label class="block text-sm font-semibold mb-2">Uang Diterima</label>
+                        <div class="relative mb-5">
+                            <span class="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-500">Rp</span>
+                            <input type="text" x-model="cashReceived" @input="cashReceived = cashReceived.replace(/[^0-9]/g, '').replace(/\B(?=(\d{3})+(?!\d))/g, '.')" class="w-full pl-12 pr-4 py-4 border-2 rounded-xl text-3xl font-bold focus:border-tunai outline-none" placeholder="0">
+                        </div>
+                        <div class="grid grid-cols-3 gap-3 mb-8">
+                            <button @click="cashReceived = grandTotal.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.')" class="py-2.5 border rounded-lg text-sm font-semibold hover:border-green-300 text-dark hover:text-green-700 bg-gray-50">Uang Pas</button>
+                            <button @click="cashReceived = '3.150.000'" class="py-2.5 border rounded-lg text-sm font-semibold hover:border-green-300 text-dark hover:text-green-700 bg-gray-50">3.150k</button>
+                            <button @click="cashReceived = '3.500.000'" class="py-2.5 border rounded-lg text-sm font-semibold hover:border-green-300 text-dark hover:text-green-700 bg-gray-50">3.500k</button>
+                        </div>
+                        <div class="mt-auto bg-gray-50 rounded-xl p-5 border" :class="cashReceivedNum > 0 ? (isCashSufficient ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200') : ''">
+                            <div class="flex justify-between">
+                                <span class="font-bold text-lg">Kembalian</span>
+                                <span class="text-3xl font-black" :class="cashReceivedNum > 0 && isCashSufficient ? 'text-green-600' : 'text-red-500'" x-text="formatRp(changeAmount)"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- QRIS -->
+                    <div x-show="method === 'qris'" class="p-8 h-full flex flex-col items-center relative">
+                        <!-- Success View Mock directly for print test -->
+                        <div x-show="qrisStatus === 'idle'" class="text-center w-full my-auto">
+                            <div class="w-24 h-24 bg-blue-50 text-qris rounded-full flex items-center justify-center mx-auto mb-6"><i data-lucide="qr-code" class="w-12 h-12"></i></div>
+                            <h3 class="text-xl font-bold mb-2">Siap Menerima QRIS</h3>
+                            <button @click="simulateQpSuccess()" class="text-xs underline text-blue-500 mt-4">(Force Success Test)</button>
+                        </div>
+                        
+                        <!-- Success View -->
+                        <div x-show="qrisStatus === 'success'" style="display: none;" class="w-full flex justify-center py-6">
+                            <div class="text-center">
+                                <div class="w-24 h-24 bg-success text-white rounded-full flex mx-auto items-center justify-center shadow-lg mb-4"><i data-lucide="check" class="w-12 h-12 border-4 rounded-full p-1"></i></div>
+                                <h3 class="text-2xl font-bold text-success mb-1">Pembayaran Berhasil!</h3>
+                                <p class="text-gray-500 font-medium mb-4">Terima kasih atas pembayarannya.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="p-5 bg-white border-t flex-shrink-0 z-20 w-full mt-auto">
+                    <!-- Tunai Action -->
+                    <button x-show="method === 'tunai'" class="w-full py-4 bg-tunai text-white font-bold rounded-xl text-lg hover:opacity-95 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed" :disabled="!isCashSufficient" @click="showReceipt = true">
+                        Selesaikan & Cetak Struk
+                    </button>
+                    <!-- QRIS Action -->
+                    <div x-show="method === 'qris'">
+                        <button x-show="qrisStatus !== 'success'" @click="generateQR()" class="w-full py-4 bg-qris text-white font-bold rounded-xl text-lg hover:opacity-95 shadow-lg">Generate QR</button>
+                        <button x-show="qrisStatus === 'success'" @click="showReceipt = true" class="w-full py-4 bg-success text-white font-bold rounded-xl text-lg hover:opacity-95 shadow-lg flex gap-2 justify-center items-center"><i data-lucide="printer"></i> Cetak Struk</button>
+                    </div>
+                </div>
+            </div>
+        </aside>
+    </main>
+
+    <!-- THERMAL RECEIPT MODAL PREVIEW -->
+    <div x-show="showReceipt" style="display:none;" x-transition.opacity class="fixed inset-0 z-50 bg-dark/70 backdrop-blur-sm flex flex-col items-center py-6 px-4">
+        
+        <div class="max-w-md w-full flex justify-between items-center mb-4 text-white">
+            <h3 class="font-bold text-lg"><i data-lucide="file-text" class="inline w-5 h-5 mb-1 mr-1"></i> Preview Print Struk</h3>
+            <button @click="showReceipt = false; view='cart'; qrisStatus='idle'; cashReceived=''; mobileCartOpen=false" class="bg-white/10 hover:bg-white/20 p-2 rounded-lg transition-colors"><i data-lucide="x" class="w-5 h-5"></i></button>
+        </div>
+
+        <div class="bg-gray-100 flex-1 w-full max-w-md rounded-2xl overflow-hidden shadow-2xl flex flex-col">
+            <!-- Scrollable Receipt Area -->
+            <div class="flex-1 overflow-y-auto p-4 sm:p-8 flex justify-center items-start custom-scrollbar">
+                
+                <!-- THE ACTUAL RECEIPT DOCUMENT (simulating 58mm/80mm width) -->
+                <div id="thermal-receipt" class="bg-white text-black font-mono shadow-sm p-4 text-[11px] leading-tight w-[300px] receipt-bottom relative">
+                    <!-- Title -->
+                    <div class="text-center mb-4">
+                        <h2 class="font-bold text-lg uppercase tracking-wide">SELLVIX POS</h2>
+                        <p class="text-[10px] mt-1 text-gray-700">Jl. Teknologi No. 12, Jakarta<br>Telp: 021-9382190</p>
+                    </div>
+                    
+                    <div class="border-t border-dashed border-black mb-2 mt-2"></div>
+                    
+                    <!-- Metadata -->
+                    <div class="flex justify-between mb-1">
+                        <span>Waktu:</span>
+                        <span x-text="formatDate()"></span>
+                    </div>
+                    <div class="flex justify-between mb-1">
+                        <span>Kasir:</span>
+                        <span>Budi S.</span>
+                    </div>
+                    <div class="flex justify-between mb-2">
+                        <span>No. Tx:</span>
+                        <span>INV-12345</span>
+                    </div>
+
+                    <div class="border-t border-dashed border-black mb-3"></div>
+                    
+                    <!-- Items -->
+                    <div class="mb-4 space-y-2">
+                        <!-- Item 1 -->
+                        <div>
+                            <div class="font-bold truncate">Jam Tangan Smart Watch Pro</div>
+                            <div class="flex justify-between mt-0.5 ml-2">
+                                <span>2 x 850.000</span>
+                                <span>1.700.000</span>
+                            </div>
+                        </div>
+                        <!-- Item 2 -->
+                        <div>
+                            <div class="font-bold truncate">Kacamata Hitam Ray-Ban</div>
+                            <div class="flex justify-between mt-0.5 ml-2">
+                                <span>1 x 1.250.000</span>
+                                <span>1.250.000</span>
+                            </div>
+                            <!-- discount subtext -->
+                            <div class="text-right text-[10px] mt-0.5">(Diskon: -10%)</div>
+                        </div>
+                    </div>
+
+                    <div class="border-t border-dashed border-black mb-2"></div>
+
+                    <!-- Totals -->
+                    <div class="space-y-1 mb-2">
+                        <div class="flex justify-between">
+                            <span>Subtotal</span>
+                            <span>2.950.000</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>Diskon</span>
+                            <span>-125.000</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>Pajak (11%)</span>
+                            <span>310.750</span>
+                        </div>
+                    </div>
+
+                    <div class="border-t border-black mb-2"></div>
+                    
+                    <!-- Grand Total -->
+                    <div class="flex justify-between items-center mb-4">
+                        <span class="font-bold text-[13px] uppercase">Total Tagihan</span>
+                        <span class="font-bold text-[15px]" x-text="formatRp(grandTotal)">3.135.750</span>
+                    </div>
+
+                    <!-- Payment Proof -->
+                    <div class="mb-6 space-y-1 ml-4 pt-1 border-t border-dashed border-transparent">
+                        <div class="flex justify-between">
+                            <span class="uppercase font-medium" x-text="method === 'tunai' ? 'Tunai (Cash)' : 'QRIS (Digital)'"></span>
+                            <span x-text="method === 'tunai' ? formatRp(cashReceivedNum) : formatRp(grandTotal)"></span>
+                        </div>
+                        <div class="flex justify-between" x-show="method === 'tunai'">
+                            <span>Kembalian</span>
+                            <span x-text="formatRp(changeAmount)"></span>
+                        </div>
+                    </div>
+                    
+                    <!-- Footer -->
+                    <div class="text-center mt-6">
+                        <p class="font-bold text-xs uppercase mb-1">Terima Kasih</p>
+                        <p class="text-[9px]">Barang yang sudah dibeli<br>tidak dapat dikembalikan.</p>
+                        <p class="text-[9px] mt-2 italic">-- Powered by Sellvix --</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Actions -->
+            <div class="p-4 bg-white flex gap-3 flex-shrink-0 z-10 border-t border-gray-200">
+                <button class="flex-1 py-3 border-2 border-gray-200 text-dark font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-gray-50 transition-colors">
+                    <i data-lucide="download" class="w-5 h-5"></i> Simpan PDF
+                </button>
+                <button @click="window.print()" class="flex-1 py-3 bg-blue-600 border-2 border-blue-600 text-white font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-blue-700 shadow-lg shadow-blue-500/30 transition-all">
+                    <i data-lucide="printer" class="w-5 h-5"></i> Print Thermal
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Overlay for mobile cart -->
+    <div x-show="mobileCartOpen" x-transition.opacity class="fixed inset-0 bg-dark/40 z-20 lg:hidden backdrop-blur-sm" @click="mobileCartOpen = false"></div>
+
+    <script> lucide.createIcons(); </script>
+</body>
+</html>

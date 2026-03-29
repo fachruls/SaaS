@@ -7,7 +7,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login — POS SaaS</title>
+<title>Login — Sellvix</title>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 <body class="min-h-screen bg-gradient-to-br from-brand-600 via-brand-700 to-indigo-900 dark:from-gray-900 dark:via-gray-900 dark:to-gray-950 flex items-center justify-center p-4 transition-colors duration-300">
@@ -20,7 +20,7 @@
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
                 </svg>
             </div>
-            <h1 class="text-2xl font-black text-white">POS SaaS</h1>
+            <h1 class="text-2xl font-black text-white">Sellvix</h1>
             <p class="text-white/60 text-sm mt-1">Sistem Kasir Multi-Toko</p>
         </div>
 
@@ -54,6 +54,7 @@
                 <div>
                     <div class="flex items-center justify-between mb-1.5">
                         <label class="text-xs font-semibold text-gray-700 dark:text-gray-300">Kata Sandi</label>
+                        <a href="{{ route('forgot-password') }}" class="text-xs text-brand-600 dark:text-brand-400 hover:underline font-medium">Lupa Password?</a>
                     </div>
                     <input type="password" name="password" required
                            class="input h-11"

@@ -209,51 +209,78 @@ class PosTerminal extends Component
             'amountPaid'    => ['required_if:paymentMethod,cash', 'numeric', 'min:0'],
         ]);
 
-        if ($this->paymentMethod === 'cash' && $this->amountPaid < $this->total) {
+        // Secure Recalculation
+        $productIds = collect($this->cart)->pluck('id');
+        $dbProducts = Product::whereIn('id', $productIds)->get()->keyBy('id');
+
+        $actualSubtotal = 0;
+        foreach ($this->cart as $item) {
+            $dbProduct = $dbProducts->get($item['id']);
+            if (! $dbProduct || ! $dbProduct->is_active) {
+                $this->dispatch('notify', type: 'error', message: 'Terdapat produk tidak valid di keranjang.');
+                return;
+            }
+            if ($dbProduct->stock < $item['quantity']) {
+                $this->dispatch('notify', type: 'error', message: "Stok {$dbProduct->name} tidak mencukupi.");
+                return;
+            }
+            $actualSubtotal += $dbProduct->price * $item['quantity'];
+        }
+
+        $actualDiscount = $actualSubtotal * ($this->discountPercent / 100);
+        $actualTaxable = $actualSubtotal - $actualDiscount;
+        $actualTax = $actualTaxable * ($this->taxPercent / 100);
+        $actualTotal = $actualTaxable + $actualTax;
+
+        if ($this->paymentMethod === 'cash' && $this->amountPaid < $actualTotal) {
             $this->addError('amountPaid', 'Uang yang diterima kurang dari total belanja.');
             return;
         }
 
+        $actualChangeAmount = ($this->paymentMethod === 'cash') ? max(0, $this->amountPaid - $actualTotal) : 0;
+        $actualAmountPaid = ($this->paymentMethod === 'cash') ? $this->amountPaid : $actualTotal;
+
         try {
-            DB::transaction(function () {
+            DB::transaction(function () use ($dbProducts, $actualSubtotal, $actualDiscount, $actualTax, $actualTotal, $actualChangeAmount, $actualAmountPaid) {
                 $transaction = Transaction::create([
                     'store_id'          => auth()->user()->store_id,
                     'cashier_shift_id'  => $this->activeShift?->id,
                     'user_id'           => auth()->id(),
                     'invoice_number'    => Transaction::generateInvoiceNumber(auth()->user()->store_id),
-                    'subtotal'          => $this->subtotal,
+                    'subtotal'          => $actualSubtotal,
                     'discount_percent'  => $this->discountPercent,
-                    'discount_amount'   => $this->discountAmount,
+                    'discount_amount'   => $actualDiscount,
                     'tax_percent'       => $this->taxPercent,
-                    'tax_amount'        => $this->taxAmount,
-                    'total'             => $this->total,
+                    'tax_amount'        => $actualTax,
+                    'total'             => $actualTotal,
                     'payment_method'    => $this->paymentMethod,
-                    'amount_paid'       => $this->paymentMethod === 'cash' ? $this->amountPaid : $this->total,
-                    'change_amount'     => $this->changeAmount,
+                    'amount_paid'       => $actualAmountPaid,
+                    'change_amount'     => $actualChangeAmount,
                     'payment_reference' => $this->paymentReference,
                     'notes'             => $this->notes,
                     'status'            => 'completed',
                 ]);
 
                 foreach ($this->cart as $item) {
+                    $dbProduct = $dbProducts->get($item['id']);
                     TransactionItem::create([
                         'transaction_id' => $transaction->id,
-                        'product_id'     => $item['id'],
-                        'product_name'   => $item['name'],
-                        'product_sku'    => $item['sku'],
-                        'price'          => $item['price'],
+                        'product_id'     => $dbProduct->id,
+                        'product_name'   => $dbProduct->name,
+                        'product_sku'    => $dbProduct->sku,
+                        'price'          => $dbProduct->price,
                         'quantity'       => $item['quantity'],
                         'discount'       => 0,
-                        'subtotal'       => $item['price'] * $item['quantity'],
+                        'subtotal'       => $dbProduct->price * $item['quantity'],
                     ]);
 
-                    // Decrement stock
-                    Product::withoutGlobalScopes()->find($item['id'])?->decrementStock($item['quantity']);
+                    // Decrement stock safely (Global Scope applies)
+                    $dbProduct->decrementStock($item['quantity']);
                 }
 
                 // Update shift totals
                 if ($this->activeShift) {
-                    $this->activeShift->increment('total_sales', $this->total);
+                    $this->activeShift->increment('total_sales', $actualTotal);
                     $this->activeShift->increment('total_transactions');
                 }
 

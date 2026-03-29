@@ -23,7 +23,7 @@
         <div class="card p-6">
             <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-4">Selamat Datang, {{ auth()->user()->name }}!</h3>
             <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                Anda berada di Panel Super Admin. Di sini Anda memiliki akses penuh untuk mendaftarkan dan mengelola seluruh tenant (toko) yang terdaftar dalam platform POS SaaS ini.
+                Anda berada di Panel Super Admin. Di sini Anda memiliki akses penuh untuk mendaftarkan dan mengelola seluruh tenant (toko) yang terdaftar dalam platform Sellvix ini.
             </p>
             <a href="{{ route('super-admin.stores.index') }}" class="btn-primary">
                 Kelola Toko Sekarang

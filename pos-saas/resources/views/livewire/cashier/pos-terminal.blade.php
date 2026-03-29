@@ -480,7 +480,7 @@ async function printReceipt() {
 
         // Data from Livewire (injected server-side)
         @php
-            $receiptStoreName   = auth()->user()->store?->name ?? 'POS SaaS';
+            $receiptStoreName   = auth()->user()->store?->name ?? 'Sellvix';
             $receiptStoreAddr   = auth()->user()->store?->address ?? '';
             $receiptCashier     = auth()->user()->name;
             $receiptInvoice     = $lastTransactionId ? 'INV-'.str_pad($lastTransactionId, 6, '0', STR_PAD_LEFT) : 'N/A';

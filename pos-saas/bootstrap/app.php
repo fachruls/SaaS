@@ -13,6 +13,7 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
             'role' => \App\Http\Middleware\EnsureRole::class,
+            'must.change.password' => \App\Http\Middleware\EnsureMustChangePassword::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
